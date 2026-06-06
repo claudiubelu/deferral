@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import threading
 from typing import Any
@@ -212,6 +213,172 @@ class DeferTests(testtools.TestCase):
             deferral.defer_on_error(lambda: calls.append("what a"))
 
         fn()
+
+        # defer_on_error skipped; rest run in reverse: foo, lish, ploy
+        self.assertEqual(["foo", "lish", "ploy"], calls)
+
+
+class AsyncDeferralTests(testtools.TestCase):
+    def _run(self, coro: Any) -> Any:
+        return asyncio.run(coro)
+
+    def test_async_defer_runs_on_success(self):
+        calls: list[str] = []
+
+        @deferral.deferred
+        async def fn() -> None:
+            deferral.defer(lambda: calls.append("lish"))
+            calls.append("foo")
+
+        self._run(fn())
+        self.assertEqual(["foo", "lish"], calls)
+
+    def test_async_defer_runs_on_error(self):
+        calls: list[str] = []
+
+        @deferral.deferred
+        async def fn() -> None:
+            deferral.defer(lambda: calls.append("lish"))
+            raise Exception("al code still breaks sometimes")
+
+        self.assertRaises(Exception, self._run, fn())
+        self.assertEqual(["lish"], calls)
+
+    def test_async_defer_lifo_order(self):
+        calls: list[str] = []
+
+        @deferral.deferred
+        async def fn() -> None:
+            deferral.defer(lambda: calls.append("code"))
+            deferral.defer(lambda: calls.append("lish"))
+            deferral.defer(lambda: calls.append("foo"))
+
+        self._run(fn())
+        self.assertEqual(["foo", "lish", "code"], calls)
+
+    def test_async_defer_on_error_skipped_on_success(self):
+        calls: list[str] = []
+
+        @deferral.deferred
+        async def fn() -> None:
+            deferral.defer_on_error(lambda: calls.append("lish"))
+
+        self._run(fn())
+
+        self.assertEqual([], calls)
+
+    def test_async_defer_on_error_runs_on_error(self):
+        calls: list[str] = []
+
+        @deferral.deferred
+        async def fn() -> None:
+            deferral.defer_on_error(lambda: calls.append("lish"))
+            raise Exception("You thought it was an await, but it was me, Dio!")
+
+        self.assertRaises(Exception, self._run, fn())
+        self.assertEqual(["lish"], calls)
+
+    def test_async_defer_on_success_runs_on_success(self):
+        calls: list[str] = []
+
+        @deferral.deferred
+        async def fn() -> None:
+            deferral.defer_on_success(lambda: calls.append("lish"))
+
+        self._run(fn())
+
+        self.assertEqual(["lish"], calls)
+
+    def test_async_defer_on_success_skipped_on_error(self):
+        calls: list[str] = []
+
+        @deferral.deferred
+        async def fn() -> None:
+            deferral.defer_on_success(lambda: calls.append("lish"))
+            raise Exception("Async Dio strikes again!")
+
+        self.assertRaises(Exception, self._run, fn())
+        self.assertEqual([], calls)
+
+    def test_async_all_defers_run_even_if_one_raises(self):
+        calls: list[str] = []
+
+        @deferral.deferred
+        async def fn() -> None:
+            deferral.defer(lambda: calls.append("lish"))
+            deferral.defer(lambda: calls.append("foo"))
+            deferral.defer(
+                lambda: _raise(Exception("Nobody expects the Spanish Inquisition!"))
+            )
+
+        self._run(fn())
+
+        self.assertEqual(["foo", "lish"], calls)
+
+    def test_async_deferred_stack_cleared_after_call(self):
+        @deferral.deferred
+        async def fn() -> None:
+            deferral.defer(lambda: None)
+
+        self._run(fn())
+
+        self.assertIsNone(_defer_stack.get())
+
+    def test_async_deferred_stack_cleared_after_error(self):
+        @deferral.deferred
+        async def fn() -> None:
+            deferral.defer(lambda: None)
+            raise Exception("I've made a huge mistake.")
+
+        self.assertRaises(Exception, self._run, fn())
+        self.assertIsNone(_defer_stack.get())
+
+    def test_async_nested_deferred(self):
+        outer_calls: list[str] = []
+        inner_calls: list[str] = []
+
+        @deferral.deferred
+        async def inner() -> None:
+            deferral.defer(lambda: inner_calls.append("ender"))
+            deferral.defer(lambda: inner_calls.append("bart"))
+
+        @deferral.deferred
+        async def outer() -> None:
+            deferral.defer(lambda: outer_calls.append("tender"))
+            await inner()
+            deferral.defer(lambda: outer_calls.append("bar"))
+
+        self._run(outer())
+
+        self.assertEqual(["bart", "ender"], inner_calls)
+        self.assertEqual(["bar", "tender"], outer_calls)
+
+    def test_async_recursive_deferred(self):
+        calls: list[int] = []
+
+        @deferral.deferred
+        async def fn(n: int) -> None:
+            deferral.defer(lambda: calls.append(-n))
+            calls.append(n)
+
+            if n > 0:
+                await fn(n - 1)
+
+        self._run(fn(2))
+
+        self.assertEqual([2, 1, 0, 0, -1, -2], calls)
+
+    def test_async_mixed_defer_types_lifo_order(self):
+        calls: list[str] = []
+
+        @deferral.deferred
+        async def fn() -> None:
+            deferral.defer(lambda: calls.append("ploy"))
+            deferral.defer_on_success(lambda: calls.append("lish"))
+            deferral.defer(lambda: calls.append("foo"))
+            deferral.defer_on_error(lambda: calls.append("what a"))
+
+        self._run(fn())
 
         # defer_on_error skipped; rest run in reverse: foo, lish, ploy
         self.assertEqual(["foo", "lish", "ploy"], calls)

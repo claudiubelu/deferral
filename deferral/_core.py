@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import logging
 import sys
@@ -159,6 +160,25 @@ def deferred(
     """
 
     def decorator(func: _F) -> _F:
+        if asyncio.iscoroutinefunction(func):
+
+            @functools.wraps(func)
+            async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+                handler = on_error if on_error is not None else _default_error_handler
+                entries: list[_DeferEntry] = []
+                token = _defer_stack.set(entries)
+                succeeded = False
+
+                try:
+                    result = await func(*args, **kwargs)
+                    succeeded = True
+                    return result
+                finally:
+                    _defer_stack.reset(token)
+                    _run_defers(entries, succeeded, handler)
+
+            return async_wrapper  # type: ignore[return-value]
+
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             handler = on_error if on_error is not None else _default_error_handler

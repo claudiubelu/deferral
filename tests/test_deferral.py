@@ -384,6 +384,69 @@ class AsyncDeferralTests(testtools.TestCase):
         self.assertEqual(["foo", "lish", "ploy"], calls)
 
 
+class DeferArgsKwargsTests(testtools.TestCase):
+    def test_defer_forwards_args(self):
+        calls: list[tuple[Any, ...]] = []
+
+        @deferral.deferred
+        def fn() -> None:
+            deferral.defer(calls.append, ("foo", "lish"))
+
+        fn()
+
+        self.assertEqual([("foo", "lish")], calls)
+
+    def test_defer_forwards_kwargs(self):
+        calls: list[dict[str, Any]] = []
+
+        def record(**kwargs: Any) -> None:
+            calls.append(kwargs)
+
+        @deferral.deferred
+        def fn() -> None:
+            deferral.defer(record, foo="lish", bar="tender")
+
+        fn()
+
+        self.assertEqual([{"foo": "lish", "bar": "tender"}], calls)
+
+    def test_defer_forwards_args_and_kwargs(self):
+        calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+
+        def record(*args: Any, **kwargs: Any) -> None:
+            calls.append((args, kwargs))
+
+        @deferral.deferred
+        def fn() -> None:
+            deferral.defer(record, "foo", "lish", bar="tender")
+
+        fn()
+
+        self.assertEqual([(("foo", "lish"), {"bar": "tender"})], calls)
+
+    def test_defer_on_error_forwards_args_kwargs(self):
+        calls: list[tuple[Any, ...]] = []
+
+        @deferral.deferred
+        def fn() -> None:
+            deferral.defer_on_error(calls.append, ("foo", "lish"))
+            raise ValueError("Killer Queen has already touched that code")
+
+        self.assertRaises(ValueError, fn)
+        self.assertEqual([("foo", "lish")], calls)
+
+    def test_defer_on_success_forwards_args_kwargs(self):
+        calls: list[tuple[Any, ...]] = []
+
+        @deferral.deferred
+        def fn() -> None:
+            deferral.defer_on_success(calls.append, ("foo", "lish"))
+
+        fn()
+
+        self.assertEqual([("foo", "lish")], calls)
+
+
 class ErrorHandlerTests(testtools.TestCase):
     def test_raise_handler_raises_after_all_defers_run(self):
         calls: list[str] = []

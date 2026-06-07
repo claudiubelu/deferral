@@ -30,7 +30,7 @@ class DeferTests(testtools.TestCase):
     def test_defer_runs_on_success(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(lambda: calls.append("lish"))
             calls.append("foo")
@@ -42,7 +42,7 @@ class DeferTests(testtools.TestCase):
     def test_defer_runs_on_error(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(lambda: calls.append("delish"))
             raise Exception("al code still breaks sometimes")
@@ -53,7 +53,7 @@ class DeferTests(testtools.TestCase):
     def test_defer_lifo_order(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(lambda: calls.append("Dante"))
             deferral.defer(lambda: calls.append("ness"))
@@ -64,11 +64,11 @@ class DeferTests(testtools.TestCase):
 
         self.assertEqual(["foo", "lish", "ness", "Dante"], calls)
 
-    def test_defer_outside_deferred_raises(self):
+    def test_defer_outside_defer_scope_raises(self):
         self.assertRaises(RuntimeError, deferral.defer, lambda: None)
 
-    def test_deferred_with_args(self):
-        @deferral.deferred(on_error=deferral.IGNORE)
+    def test_defer_scope_with_args(self):
+        @deferral.defer_scope(on_error=deferral.IGNORE)
         def fn() -> str:
             return "foo"
 
@@ -77,7 +77,7 @@ class DeferTests(testtools.TestCase):
     def test_defer_on_error_skipped_on_success(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer_on_error(lambda: calls.append("lish"))
 
@@ -88,7 +88,7 @@ class DeferTests(testtools.TestCase):
     def test_defer_on_error_runs_on_error(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer_on_error(lambda: calls.append("lish"))
             raise Exception("You thought it was a return, but it was me, Dio!")
@@ -99,7 +99,7 @@ class DeferTests(testtools.TestCase):
     def test_defer_on_success_runs_on_success(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer_on_success(lambda: calls.append("lish"))
 
@@ -110,7 +110,7 @@ class DeferTests(testtools.TestCase):
     def test_defer_on_success_skipped_on_error(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer_on_success(lambda: calls.append("lish"))
             raise Exception("al questions at work or school")
@@ -121,7 +121,7 @@ class DeferTests(testtools.TestCase):
     def test_all_defers_run_even_if_one_raises(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(lambda: calls.append("lish"))
             deferral.defer(lambda: calls.append("foo"))
@@ -133,8 +133,8 @@ class DeferTests(testtools.TestCase):
 
         self.assertEqual(["foo", "lish"], calls)
 
-    def test_deferred_stack_cleared_after_call(self):
-        @deferral.deferred
+    def test_defer_scope_stack_cleared_after_call(self):
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(lambda: None)
 
@@ -142,8 +142,8 @@ class DeferTests(testtools.TestCase):
 
         self.assertIsNone(_defer_stack.get())
 
-    def test_deferred_stack_cleared_after_error(self):
-        @deferral.deferred
+    def test_defer_scope_stack_cleared_after_error(self):
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(lambda: None)
             raise Exception("al coding practices")
@@ -151,16 +151,16 @@ class DeferTests(testtools.TestCase):
         self.assertRaises(Exception, fn)
         self.assertIsNone(_defer_stack.get())
 
-    def test_nested_deferred(self):
+    def test_nested_defer_scope(self):
         outer_calls: list[str] = []
         inner_calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         def inner() -> None:
             deferral.defer(lambda: inner_calls.append("great"))
             deferral.defer(lambda: inner_calls.append("the"))
 
-        @deferral.deferred
+        @deferral.defer_scope
         def outer() -> None:
             deferral.defer(lambda: outer_calls.append("tender"))
             inner()
@@ -171,10 +171,10 @@ class DeferTests(testtools.TestCase):
         self.assertEqual(["the", "great"], inner_calls)
         self.assertEqual(["pre", "tender"], outer_calls)
 
-    def test_recursive_deferred(self):
+    def test_recursive_defer_scope(self):
         calls: list[int] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn(n: int) -> None:
             deferral.defer(lambda: calls.append(-n))
             calls.append(n)
@@ -186,16 +186,16 @@ class DeferTests(testtools.TestCase):
 
         self.assertEqual([2, 1, 0, 0, -1, -2], calls)
 
-    def test_deferred_preserves_return_value(self):
-        @deferral.deferred
+    def test_defer_scope_preserves_return_value(self):
+        @deferral.defer_scope
         def fn() -> str:
             deferral.defer(lambda: None)
             return "foo"
 
         self.assertEqual("foo", fn())
 
-    def test_deferred_preserves_function_metadata(self):
-        @deferral.deferred
+    def test_defer_scope_preserves_function_metadata(self):
+        @deferral.defer_scope
         def the_world() -> None:  # ZA WARUDO
             """Stops time."""
 
@@ -205,7 +205,7 @@ class DeferTests(testtools.TestCase):
     def test_mixed_defer_types_lifo_order(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(lambda: calls.append("ploy"))
             deferral.defer_on_success(lambda: calls.append("lish"))
@@ -225,7 +225,7 @@ class AsyncDeferralTests(testtools.TestCase):
     def test_async_defer_runs_on_success(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         async def fn() -> None:
             deferral.defer(lambda: calls.append("lish"))
             calls.append("foo")
@@ -236,7 +236,7 @@ class AsyncDeferralTests(testtools.TestCase):
     def test_async_defer_runs_on_error(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         async def fn() -> None:
             deferral.defer(lambda: calls.append("lish"))
             raise Exception("al code still breaks sometimes")
@@ -247,7 +247,7 @@ class AsyncDeferralTests(testtools.TestCase):
     def test_async_defer_lifo_order(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         async def fn() -> None:
             deferral.defer(lambda: calls.append("code"))
             deferral.defer(lambda: calls.append("lish"))
@@ -259,7 +259,7 @@ class AsyncDeferralTests(testtools.TestCase):
     def test_async_defer_on_error_skipped_on_success(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         async def fn() -> None:
             deferral.defer_on_error(lambda: calls.append("lish"))
 
@@ -270,7 +270,7 @@ class AsyncDeferralTests(testtools.TestCase):
     def test_async_defer_on_error_runs_on_error(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         async def fn() -> None:
             deferral.defer_on_error(lambda: calls.append("lish"))
             raise Exception("You thought it was an await, but it was me, Dio!")
@@ -281,7 +281,7 @@ class AsyncDeferralTests(testtools.TestCase):
     def test_async_defer_on_success_runs_on_success(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         async def fn() -> None:
             deferral.defer_on_success(lambda: calls.append("lish"))
 
@@ -292,7 +292,7 @@ class AsyncDeferralTests(testtools.TestCase):
     def test_async_defer_on_success_skipped_on_error(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         async def fn() -> None:
             deferral.defer_on_success(lambda: calls.append("lish"))
             raise Exception("Async Dio strikes again!")
@@ -303,7 +303,7 @@ class AsyncDeferralTests(testtools.TestCase):
     def test_async_all_defers_run_even_if_one_raises(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         async def fn() -> None:
             deferral.defer(lambda: calls.append("lish"))
             deferral.defer(lambda: calls.append("foo"))
@@ -315,8 +315,8 @@ class AsyncDeferralTests(testtools.TestCase):
 
         self.assertEqual(["foo", "lish"], calls)
 
-    def test_async_deferred_stack_cleared_after_call(self):
-        @deferral.deferred
+    def test_async_defer_scope_stack_cleared_after_call(self):
+        @deferral.defer_scope
         async def fn() -> None:
             deferral.defer(lambda: None)
 
@@ -324,8 +324,8 @@ class AsyncDeferralTests(testtools.TestCase):
 
         self.assertIsNone(_defer_stack.get())
 
-    def test_async_deferred_stack_cleared_after_error(self):
-        @deferral.deferred
+    def test_async_defer_scope_stack_cleared_after_error(self):
+        @deferral.defer_scope
         async def fn() -> None:
             deferral.defer(lambda: None)
             raise Exception("I've made a huge mistake.")
@@ -333,16 +333,16 @@ class AsyncDeferralTests(testtools.TestCase):
         self.assertRaises(Exception, self._run, fn())
         self.assertIsNone(_defer_stack.get())
 
-    def test_async_nested_deferred(self):
+    def test_async_nested_defer_scope(self):
         outer_calls: list[str] = []
         inner_calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         async def inner() -> None:
             deferral.defer(lambda: inner_calls.append("ender"))
             deferral.defer(lambda: inner_calls.append("bart"))
 
-        @deferral.deferred
+        @deferral.defer_scope
         async def outer() -> None:
             deferral.defer(lambda: outer_calls.append("tender"))
             await inner()
@@ -353,10 +353,10 @@ class AsyncDeferralTests(testtools.TestCase):
         self.assertEqual(["bart", "ender"], inner_calls)
         self.assertEqual(["bar", "tender"], outer_calls)
 
-    def test_async_recursive_deferred(self):
+    def test_async_recursive_defer_scope(self):
         calls: list[int] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         async def fn(n: int) -> None:
             deferral.defer(lambda: calls.append(-n))
             calls.append(n)
@@ -371,7 +371,7 @@ class AsyncDeferralTests(testtools.TestCase):
     def test_async_mixed_defer_types_lifo_order(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         async def fn() -> None:
             deferral.defer(lambda: calls.append("ploy"))
             deferral.defer_on_success(lambda: calls.append("lish"))
@@ -388,7 +388,7 @@ class DeferArgsKwargsTests(testtools.TestCase):
     def test_defer_forwards_args(self):
         calls: list[tuple[Any, ...]] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(calls.append, ("foo", "lish"))
 
@@ -402,7 +402,7 @@ class DeferArgsKwargsTests(testtools.TestCase):
         def record(**kwargs: Any) -> None:
             calls.append(kwargs)
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(record, foo="lish", bar="tender")
 
@@ -416,7 +416,7 @@ class DeferArgsKwargsTests(testtools.TestCase):
         def record(*args: Any, **kwargs: Any) -> None:
             calls.append((args, kwargs))
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(record, "foo", "lish", bar="tender")
 
@@ -427,7 +427,7 @@ class DeferArgsKwargsTests(testtools.TestCase):
     def test_defer_on_error_forwards_args_kwargs(self):
         calls: list[tuple[Any, ...]] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer_on_error(calls.append, ("foo", "lish"))
             raise ValueError("Killer Queen has already touched that code")
@@ -438,7 +438,7 @@ class DeferArgsKwargsTests(testtools.TestCase):
     def test_defer_on_success_forwards_args_kwargs(self):
         calls: list[tuple[Any, ...]] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer_on_success(calls.append, ("foo", "lish"))
 
@@ -451,7 +451,7 @@ class ErrorHandlerTests(testtools.TestCase):
     def test_raise_handler_raises_after_all_defers_run(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer_on_success(
                 lambda: calls.append("lish"),
@@ -469,7 +469,7 @@ class ErrorHandlerTests(testtools.TestCase):
         self.assertEqual(["foo", "lish"], calls)
 
     def test_raise_handler_multiple_failures_raises_exception_group(self):
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(
                 lambda: _raise(Exception("You shall not pass!")),
@@ -487,7 +487,7 @@ class ErrorHandlerTests(testtools.TestCase):
     def test_ignore_handler_swallows_exception(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(lambda: calls.append("foo"), on_error=deferral.IGNORE)
             deferral.defer(
@@ -502,7 +502,7 @@ class ErrorHandlerTests(testtools.TestCase):
         self.assertEqual(["foo"], calls)
 
     def test_log_handler_logs_and_continues(self):
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(
                 lambda: _raise(Exception("This is fine.")),
@@ -514,7 +514,7 @@ class ErrorHandlerTests(testtools.TestCase):
             mock_log.assert_called_once()
 
     def test_body_exception_propagates_when_defer_also_raises(self):
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(
                 lambda: _raise(Exception("I'll be back.")),
@@ -532,7 +532,7 @@ class ErrorHandlerTests(testtools.TestCase):
     def test_scope_level_error_handler(self):
         calls: list[str] = []
 
-        @deferral.deferred(on_error=deferral.IGNORE)
+        @deferral.defer_scope(on_error=deferral.IGNORE)
         def fn() -> None:
             deferral.defer(lambda: calls.append("lish"), on_error=deferral.RAISE)
             deferral.defer(lambda: _raise(Exception("Winter is coming.")))
@@ -543,7 +543,7 @@ class ErrorHandlerTests(testtools.TestCase):
         self.assertEqual(["lish"], calls)
 
     def test_per_defer_handler_overrides_scope_handler(self):
-        @deferral.deferred(on_error=deferral.IGNORE)
+        @deferral.defer_scope(on_error=deferral.IGNORE)
         def fn() -> None:
             deferral.defer(
                 lambda: _raise(Exception("I'm the captain now.")),
@@ -559,7 +559,7 @@ class ErrorHandlerTests(testtools.TestCase):
         def broken_handler(exc: BaseException) -> None:
             raise handler_exc
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(
                 lambda: _raise(cleanup_exc),
@@ -576,7 +576,7 @@ class ErrorHandlerTests(testtools.TestCase):
         try:
             deferral.set_default_error_handler(deferral.IGNORE)
 
-            @deferral.deferred
+            @deferral.defer_scope
             def fn() -> None:
                 deferral.defer(lambda: _raise(Exception("Why so serious?")))
 
@@ -588,7 +588,7 @@ class ErrorHandlerTests(testtools.TestCase):
 
 class IgnoreExceptionsTests(testtools.TestCase):
     def test_ignored_exception_does_not_raise(self):
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(
                 lambda: _raise(FileNotFoundError("no such file")),
@@ -600,7 +600,7 @@ class IgnoreExceptionsTests(testtools.TestCase):
             mock_log.assert_called_once()
 
     def test_ignored_exception_tuple_does_not_raise(self):
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(
                 lambda: _raise(PermissionError("no such permissions")),
@@ -616,7 +616,7 @@ class IgnoreExceptionsTests(testtools.TestCase):
             self.assertEqual(2, mock_log.call_count)
 
     def test_non_ignored_exception_still_goes_through_handler(self):
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(
                 lambda: _raise(ValueError("unexpected")),
@@ -627,7 +627,7 @@ class IgnoreExceptionsTests(testtools.TestCase):
         self.assertRaises(ValueError, fn)
 
     def test_ignored_exception_bypasses_raise_handler(self):
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(
                 lambda: _raise(FileNotFoundError("no such file")),
@@ -639,7 +639,7 @@ class IgnoreExceptionsTests(testtools.TestCase):
         fn()
 
     def test_ignore_exceptions_on_defer_on_success(self):
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer_on_success(
                 lambda: _raise(FileNotFoundError("no such file")),
@@ -651,7 +651,7 @@ class IgnoreExceptionsTests(testtools.TestCase):
         fn()
 
     def test_ignore_exceptions_on_defer_on_error(self):
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer_on_error(
                 lambda: _raise(FileNotFoundError("no such file")),
@@ -666,7 +666,7 @@ class IgnoreExceptionsTests(testtools.TestCase):
     def test_remaining_defers_run_after_ignored_exception(self):
         calls: list[str] = []
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(lambda: calls.append("foo"))
             deferral.defer(
@@ -679,7 +679,7 @@ class IgnoreExceptionsTests(testtools.TestCase):
         self.assertEqual(["foo"], calls)
 
     def test_subclass_of_ignored_exception_is_also_ignored(self):
-        @deferral.deferred
+        @deferral.defer_scope
         def fn() -> None:
             deferral.defer(
                 lambda: _raise(FileNotFoundError("no such file")),
@@ -695,7 +695,7 @@ class ThreadSafetyTests(testtools.TestCase):
         barrier = threading.Barrier(4)
         results: dict = {}
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn(thread_id: str) -> None:
             deferral.defer(lambda: results.update({thread_id: thread_id}))
             barrier.wait()  # all stacks live at the same time
@@ -714,12 +714,12 @@ class ThreadSafetyTests(testtools.TestCase):
             {"foo": "foo", "lish": "lish", "bar": "bar", "tender": "tender"}, results
         )
 
-    def test_concurrent_deferred_calls_do_not_interfere(self):
+    def test_concurrent_defer_scope_calls_do_not_interfere(self):
         barrier = threading.Barrier(4)
         calls: list[str] = []
         lock = threading.Lock()
 
-        @deferral.deferred
+        @deferral.defer_scope
         def fn(value: str) -> None:
             def append() -> None:
                 with lock:

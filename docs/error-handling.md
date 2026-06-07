@@ -13,16 +13,16 @@ When a cleanup itself raises, `deferral` gives you three built-in strategies, mi
 Set the handler once on the decorator to apply it to every cleanup in that function, then override per cleanup as needed:
 
 ```python
-from deferral import deferred, defer, IGNORE, RAISE
+from deferral import defer_scope, defer, IGNORE, RAISE
 
 # scope-level: all cleanups in this function default to RAISE
-@deferred(on_error=RAISE)
+@defer_scope(on_error=RAISE)
 def strict_setup():
     defer(must_not_fail)
     defer(also_must_not_fail)
 
 # per-cleanup override: one cleanup is exempt, others inherit the scope default
-@deferred(on_error=RAISE)
+@defer_scope(on_error=RAISE)
 def mixed_setup():
     defer(must_succeed, on_error=RAISE)
     defer(best_effort, on_error=IGNORE)   # allowed to fail silently
@@ -35,7 +35,7 @@ def mixed_setup():
 For cleanups that routinely raise predictable exceptions (e.g., "already deleted"), use `ignore_exceptions`:
 
 ```python
-@deferred
+@defer_scope
 def cleanup_temp_file(path):
     defer(os.remove, path, ignore_exceptions=FileNotFoundError)  # idempotent; fine if already gone
 ```
@@ -48,12 +48,12 @@ Any callable that takes a `BaseException` and returns `None` works as a handler.
 
 ```python
 import sentry_sdk
-from deferral import deferred, defer
+from deferral import defer_scope, defer
 
 def report_and_swallow(exc: BaseException) -> None:
     sentry_sdk.capture_exception(exc)
 
-@deferred(on_error=report_and_swallow)
+@defer_scope(on_error=report_and_swallow)
 def deploy():
     defer(teardown_blue_env)
     defer(close_tunnel)
@@ -62,7 +62,7 @@ def deploy():
 Per-cleanup overrides accept custom handlers too:
 
 ```python
-@deferred
+@defer_scope
 def process():
     defer(noisy_cleanup, on_error=report_and_swallow)
     defer(quiet_cleanup, on_error=deferral.IGNORE)

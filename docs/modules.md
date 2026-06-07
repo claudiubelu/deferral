@@ -1,6 +1,6 @@
 ﻿# API reference
 
-::: deferral._core.deferred
+::: deferral._core.defer_scope
 
 ::: deferral._core.defer
 

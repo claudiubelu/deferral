@@ -5,7 +5,7 @@
 `defer`, `defer_on_error`, and `defer_on_success` forward positional and keyword arguments directly to the cleanup callable:
 
 ```python
-@deferred
+@defer_scope
 def build(src_dir, dst_dir):
     defer(shutil.copy2, src_dir, "/tmp/backup", follow_symlinks=False)
     defer(subprocess.run, ["make", "clean"], check=False, cwd=src_dir)
@@ -19,10 +19,10 @@ defer(lambda: my_cleanup(on_error=True))
 
 ## Async support
 
-`@deferred` works on `async def` functions without any changes:
+`@defer_scope` works on `async def` functions without any changes:
 
 ```python
-@deferred
+@defer_scope
 async def fetch_and_store(url):
     session = await create_session()
     defer(session.close)
@@ -34,14 +34,14 @@ async def fetch_and_store(url):
 
 ## Thread and async safety
 
-Each thread and each asyncio task has its own independent defer stack, implemented via [`ContextVar`](https://docs.python.org/3/library/contextvars.html). Nested and recursive `@deferred` calls each get their own stack - `defer()` always targets the innermost decorated function.
+Each thread and each asyncio task has its own independent defer stack, implemented via [`ContextVar`](https://docs.python.org/3/library/contextvars.html). Nested and recursive `@defer_scope` calls each get their own stack - `defer()` always targets the innermost decorated function.
 
 ```python
-@deferred
+@defer_scope
 def inner():
     defer(print, "inner cleanup")
 
-@deferred
+@defer_scope
 def outer():
     defer(print, "outer - runs last")
     inner()

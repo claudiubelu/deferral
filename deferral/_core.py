@@ -91,7 +91,7 @@ def _register(
 ) -> None:
     stack = _defer_stack.get()
     if stack is None:
-        raise RuntimeError("defer() called outside of a @deferred function")
+        raise RuntimeError("defer() called outside of a @defer_scope function")
 
     stack.append((
         fn,
@@ -111,7 +111,7 @@ def defer(
     ignore_exceptions: ExceptTypes | None = None,
     **kwargs: Any,
 ) -> None:
-    """Schedule fn to run when the enclosing @deferred function exits, whether it succeeds or fails."""
+    """Schedule fn to run when the enclosing @defer_scope function exits, whether it succeeds or fails."""
     _register(
         fn, args, kwargs, True, True, on_error, _normalize_ignore(ignore_exceptions)
     )
@@ -124,7 +124,7 @@ def defer_on_error(
     ignore_exceptions: ExceptTypes | None = None,
     **kwargs: Any,
 ) -> None:
-    """Schedule fn to run only if the enclosing @deferred function exits with an exception."""
+    """Schedule fn to run only if the enclosing @defer_scope function exits with an exception."""
     _register(
         fn, args, kwargs, False, True, on_error, _normalize_ignore(ignore_exceptions)
     )
@@ -137,7 +137,7 @@ def defer_on_success(
     ignore_exceptions: ExceptTypes | None = None,
     **kwargs: Any,
 ) -> None:
-    """Schedule fn to run only if the enclosing @deferred function returns successfully."""
+    """Schedule fn to run only if the enclosing @defer_scope function returns successfully."""
     _register(
         fn, args, kwargs, True, False, on_error, _normalize_ignore(ignore_exceptions)
     )
@@ -206,7 +206,7 @@ def _run_defers(
     raise BaseExceptionGroup("deferred cleanups raised exceptions", raise_exceptions)
 
 
-def deferred(
+def defer_scope(
     fn: _F | None = None,
     *,
     on_error: ErrorHandler | None = None,
@@ -215,10 +215,10 @@ def deferred(
 
     Can be used with or without arguments:
 
-        @deferred
+        @defer_scope
         def fn(): ...
 
-        @deferred(on_error=RAISE)
+        @defer_scope(on_error=RAISE)
         def fn(): ...
     """
 

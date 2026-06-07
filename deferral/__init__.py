@@ -11,7 +11,7 @@ from deferral._core import (
     defer,
     defer_on_error,
     defer_on_success,
-    deferred,
+    defer_scope,
     set_default_error_handler,
 )
 
@@ -24,6 +24,6 @@ __all__ = [
     "defer",
     "defer_on_error",
     "defer_on_success",
-    "deferred",
+    "defer_scope",
     "set_default_error_handler",
 ]

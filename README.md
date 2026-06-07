@@ -40,9 +40,9 @@ def provision(name):
 
 ```python
 # after: your faith in humanity, gently returning
-from deferral import deferred, defer, defer_on_success
+from deferral import defer_scope, defer, defer_on_success
 
-@deferred
+@defer_scope
 def provision(name):
     conn = db.connect()
     defer(conn.close)
@@ -74,14 +74,14 @@ Python 3.7 – 3.14. No dependencies on 3.11+; uses the [`exceptiongroup`](https
 
 ## Core API
 
-### `@deferred` - the decorator
+### `@defer_scope` - the decorator
 
-Wrap any function (sync or async) with `@deferred` to enable `defer()` calls inside it. Transparent: preserves the function's name, docstring, and signature.
+Wrap any function (sync or async) with `@defer_scope` to enable `defer()` calls inside it. Transparent: preserves the function's name, docstring, and signature.
 
 ```python
-from deferral import deferred, defer
+from deferral import defer_scope, defer
 
-@deferred
+@defer_scope
 def my_function():
     defer(print, "cleanup")
     print("work")
@@ -91,9 +91,9 @@ def my_function():
 Can be used with arguments to configure the error handler for the whole scope:
 
 ```python
-from deferral import deferred, RAISE
+from deferral import defer_scope, RAISE
 
-@deferred(on_error=RAISE)
+@defer_scope(on_error=RAISE)
 def my_function():
     ...
 ```
@@ -102,10 +102,10 @@ def my_function():
 
 ### `defer(fn)` - always runs
 
-Registers `fn` to run when the enclosing `@deferred` function exits, whether it succeeds or raises. Multiple calls run in **LIFO order** (last registered, first executed), just like `finally` blocks and Go's `defer`.
+Registers `fn` to run when the enclosing `@defer_scope` function exits, whether it succeeds or raises. Multiple calls run in **LIFO order** (last registered, first executed), just like `finally` blocks and Go's `defer`.
 
 ```python
-@deferred
+@defer_scope
 def setup():
     a = open_resource_a()
     defer(a.close)           # runs third
@@ -124,7 +124,7 @@ def setup():
 Like Zig's `errdefer` or D's `scope(failure)`. The cleanup runs only if the function exits with an exception. Useful for rolling back partial state.
 
 ```python
-@deferred
+@defer_scope
 def create_user(name):
     user = db.insert_user(name)
     defer_on_error(db.delete_user, user.id)  # rollback on failure
@@ -140,7 +140,7 @@ def create_user(name):
 The mirror image, like D's `scope(success)`. Runs only when the function returns cleanly.
 
 ```python
-@deferred
+@defer_scope
 def complete_order(order_id):
     result = process_payment(order_id)
     defer_on_success(notify_warehouse, order_id)  # only if payment succeeded
@@ -154,7 +154,7 @@ def complete_order(order_id):
 All three variants share a single LIFO queue and interleave naturally:
 
 ```python
-@deferred
+@defer_scope
 def transfer_funds(src, dst, amount):
     tx = db.begin()
     defer(tx.close)  # always close the transaction

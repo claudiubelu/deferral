@@ -44,8 +44,16 @@ ErrorHandler = Union[Callable[[BaseException], None], _Sentinel]
 
 _default_error_handler: ErrorHandler = LOG
 
-# (cleanup_fn, run_on_success, run_on_error, per_defer_on_error_override)
-_DeferEntry = tuple[Callable[..., Any], bool, bool, ErrorHandler | None]
+ExceptTypes = type[BaseException] | tuple[type[BaseException], ...]
+
+# (cleanup_fn, run_on_success, run_on_error, per_defer_on_error_override, ignore_exceptions)
+_DeferEntry = tuple[
+    Callable[..., Any],
+    bool,
+    bool,
+    ErrorHandler | None,
+    tuple[type[BaseException], ...],
+]
 
 _defer_stack: ContextVar[list[_DeferEntry] | None] = ContextVar(
     "_defer_stack", default=None
@@ -58,36 +66,60 @@ def set_default_error_handler(handler: ErrorHandler) -> None:
     _default_error_handler = handler
 
 
+def _normalize_ignore(
+    ignore_exceptions: ExceptTypes | None,
+) -> tuple[type[BaseException], ...]:
+    if ignore_exceptions is None:
+        return ()
+
+    if isinstance(ignore_exceptions, tuple):
+        return ignore_exceptions
+
+    return (ignore_exceptions,)
+
+
 def _register(
     fn: Callable[..., Any],
     run_on_success: bool,
     run_on_error: bool,
     on_error: ErrorHandler | None,
+    ignore_exceptions: tuple[type[BaseException], ...],
 ) -> None:
     stack = _defer_stack.get()
     if stack is None:
         raise RuntimeError("defer() called outside of a @deferred function")
 
-    stack.append((fn, run_on_success, run_on_error, on_error))
+    stack.append((fn, run_on_success, run_on_error, on_error, ignore_exceptions))
 
 
-def defer(fn: Callable[..., Any], *, on_error: ErrorHandler | None = None) -> None:
+def defer(
+    fn: Callable[..., Any],
+    *,
+    on_error: ErrorHandler | None = None,
+    ignore_exceptions: ExceptTypes | None = None,
+) -> None:
     """Schedule fn to run when the enclosing @deferred function exits, whether it succeeds or fails."""
-    _register(fn, True, True, on_error)
+    _register(fn, True, True, on_error, _normalize_ignore(ignore_exceptions))
 
 
 def defer_on_error(
-    fn: Callable[..., Any], *, on_error: ErrorHandler | None = None
+    fn: Callable[..., Any],
+    *,
+    on_error: ErrorHandler | None = None,
+    ignore_exceptions: ExceptTypes | None = None,
 ) -> None:
     """Schedule fn to run only if the enclosing @deferred function exits with an exception."""
-    _register(fn, False, True, on_error)
+    _register(fn, False, True, on_error, _normalize_ignore(ignore_exceptions))
 
 
 def defer_on_success(
-    fn: Callable[..., Any], *, on_error: ErrorHandler | None = None
+    fn: Callable[..., Any],
+    *,
+    on_error: ErrorHandler | None = None,
+    ignore_exceptions: ExceptTypes | None = None,
 ) -> None:
     """Schedule fn to run only if the enclosing @deferred function returns successfully."""
-    _register(fn, True, False, on_error)
+    _register(fn, True, False, on_error, _normalize_ignore(ignore_exceptions))
 
 
 def _handle_cleanup_error(
@@ -113,7 +145,13 @@ def _run_defers(
 ) -> None:
     raise_exceptions: list[BaseException] = []
 
-    for fn, run_on_success, run_on_error, per_defer_handler in reversed(entries):
+    for (
+        fn,
+        run_on_success,
+        run_on_error,
+        per_defer_handler,
+        ignore_exceptions,
+    ) in reversed(entries):
         if (succeeded and not run_on_success) or (not succeeded and not run_on_error):
             continue
 
@@ -123,6 +161,8 @@ def _run_defers(
 
         try:
             fn()
+        except ignore_exceptions as exc:
+            _logger.debug("deferral cleanup ignored expected exception", exc_info=exc)
         except BaseException as exc:
             _handle_cleanup_error(exc, handler, raise_exceptions)
 

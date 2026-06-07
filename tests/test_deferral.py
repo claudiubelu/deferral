@@ -523,6 +523,110 @@ class ErrorHandlerTests(testtools.TestCase):
             deferral.set_default_error_handler(original)
 
 
+class IgnoreExceptionsTests(testtools.TestCase):
+    def test_ignored_exception_does_not_raise(self):
+        @deferral.deferred
+        def fn() -> None:
+            deferral.defer(
+                lambda: _raise(FileNotFoundError("no such file")),
+                ignore_exceptions=FileNotFoundError,
+            )
+
+        with mock.patch.object(deferral._core._logger, "debug") as mock_log:
+            fn()  # must not raise
+            mock_log.assert_called_once()
+
+    def test_ignored_exception_tuple_does_not_raise(self):
+        @deferral.deferred
+        def fn() -> None:
+            deferral.defer(
+                lambda: _raise(PermissionError("no such permissions")),
+                ignore_exceptions=(FileNotFoundError, PermissionError),
+            )
+            deferral.defer(
+                lambda: _raise(FileNotFoundError("no such file")),
+                ignore_exceptions=(FileNotFoundError, PermissionError),
+            )
+
+        with mock.patch.object(deferral._core._logger, "debug") as mock_log:
+            fn()  # must not raise
+            self.assertEqual(2, mock_log.call_count)
+
+    def test_non_ignored_exception_still_goes_through_handler(self):
+        @deferral.deferred
+        def fn() -> None:
+            deferral.defer(
+                lambda: _raise(ValueError("unexpected")),
+                on_error=deferral.RAISE,
+                ignore_exceptions=FileNotFoundError,
+            )
+
+        self.assertRaises(ValueError, fn)
+
+    def test_ignored_exception_bypasses_raise_handler(self):
+        @deferral.deferred
+        def fn() -> None:
+            deferral.defer(
+                lambda: _raise(FileNotFoundError("no such file")),
+                on_error=deferral.RAISE,
+                ignore_exceptions=FileNotFoundError,
+            )
+
+        # RAISE must not win over ignore_exceptions
+        fn()
+
+    def test_ignore_exceptions_on_defer_on_success(self):
+        @deferral.deferred
+        def fn() -> None:
+            deferral.defer_on_success(
+                lambda: _raise(FileNotFoundError("no such file")),
+                on_error=deferral.RAISE,
+                ignore_exceptions=FileNotFoundError,
+            )
+
+        # RAISE must not win over ignore_exceptions
+        fn()
+
+    def test_ignore_exceptions_on_defer_on_error(self):
+        @deferral.deferred
+        def fn() -> None:
+            deferral.defer_on_error(
+                lambda: _raise(FileNotFoundError("no such file")),
+                on_error=deferral.RAISE,
+                ignore_exceptions=FileNotFoundError,
+            )
+            raise ValueError("some body failed")
+
+        # only the body exception is raised, not the cleanup.
+        self.assertRaises(ValueError, fn)
+
+    def test_remaining_defers_run_after_ignored_exception(self):
+        calls: list[str] = []
+
+        @deferral.deferred
+        def fn() -> None:
+            deferral.defer(lambda: calls.append("foo"))
+            deferral.defer(
+                lambda: _raise(FileNotFoundError("no such file")),
+                ignore_exceptions=FileNotFoundError,
+            )
+
+        fn()
+
+        self.assertEqual(["foo"], calls)
+
+    def test_subclass_of_ignored_exception_is_also_ignored(self):
+        @deferral.deferred
+        def fn() -> None:
+            deferral.defer(
+                lambda: _raise(FileNotFoundError("no such file")),
+                ignore_exceptions=OSError,
+            )
+
+        # FileNotFoundError is a subclass of OSError.
+        fn()
+
+
 class ThreadSafetyTests(testtools.TestCase):
     def test_threads_have_independent_defer_stacks(self):
         barrier = threading.Barrier(4)

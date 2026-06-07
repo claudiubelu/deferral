@@ -9,7 +9,9 @@ copyright: Maintained by <a href="https://claudiubelu.com">claudiubelu</a>.
 
 nav:
   - Home: index.md
-  - Modules: modules.md
+  - Error handling: error-handling.md
+  - Advanced: advanced.md
+  - API reference: modules.md
 plugins:
   - search
   - mkdocstrings:
